@@ -1,0 +1,28 @@
+{
+    "sounds": [
+      {
+        "filename": "138049__pakasit21__typewriter.mp3",
+        "page": 0,
+        "note": 36,
+        "volume_offset": 0.0,
+        "color": [255, 0, 0],
+        "mode": "hold"
+      },
+      {
+        "filename": "171671__leszek_szary__success-1.wav",
+        "page": 0,
+        "note": 37,
+        "volume_offset": 0.0,
+        "color": [255, 0, 0],
+        "mode": "oneshot"
+      },
+      {
+        "filename": "842540__josefpres__piano-loops-201-octave-short-loop-120-bpm.wav",
+        "page": 0,
+        "note": 38,
+        "volume_offset": 0.0,
+        "color": [255, 0, 0],
+        "mode": "loop"
+      }
+    ]
+  }
