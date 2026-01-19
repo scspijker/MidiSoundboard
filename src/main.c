@@ -41,7 +41,7 @@ static int load_sounds_from_config(const char *config_path) {
         printf("[MAIN] Loading sound: %s (page=%u, note=%u)\n", 
                filepath, sound_cfg->page, sound_cfg->note);
         
-        audio_data_t audio;
+        audio_data_t audio = {0};
         if (audio_load_file(filepath, &audio) != 0) {
             fprintf(stderr, "[MAIN] Failed to load: %s\n", filepath);
             continue;
@@ -55,7 +55,9 @@ static int load_sounds_from_config(const char *config_path) {
             continue;
         }
         
-        // Note: audio.data is now owned by soundboard, don't free it here
+        // Note: audio.data is now owned by soundboard, clear pointer to avoid double-free
+        audio.data = NULL;
+        audio_free(&audio); // Safe to call with NULL data
         loaded_count++;
     }
     

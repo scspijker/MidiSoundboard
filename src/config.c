@@ -81,15 +81,31 @@ static int parse_sound_entry(const char **json, sound_config_t *sound) {
         } else if (strcmp(key, "page") == 0) {
             int val;
             if (parse_number(json, &val) == 0) {
-                sound->page = (uint8_t)val;
+                if (val >= 0 && val <= 10) {
+                    sound->page = (uint8_t)val;
+                } else {
+                    fprintf(stderr, "[CONFIG] Invalid page: %d (must be 0-10)\n", val);
+                }
             }
         } else if (strcmp(key, "note") == 0) {
             int val;
             if (parse_number(json, &val) == 0) {
-                sound->note = (uint8_t)val;
+                if (val >= 0 && val <= 127) {
+                    sound->note = (uint8_t)val;
+                } else {
+                    fprintf(stderr, "[CONFIG] Invalid note: %d (must be 0-127)\n", val);
+                }
             }
         } else if (strcmp(key, "volume_offset") == 0) {
-            parse_float(json, &sound->volume_offset);
+            float vol;
+            if (parse_float(json, &vol) == 0) {
+                if (vol >= -1.0f && vol <= 1.0f) {
+                    sound->volume_offset = vol;
+                } else {
+                    fprintf(stderr, "[CONFIG] Invalid volume_offset: %f (must be -1.0 to 1.0)\n", vol);
+                    sound->volume_offset = 0.0f;
+                }
+            }
         } else if (strcmp(key, "color") == 0) {
             skip_whitespace(json);
             if (**json == '[') {
@@ -142,8 +158,26 @@ int config_load(const char *json_path, config_t *config) {
     long size = ftell(f);
     fseek(f, 0, SEEK_SET);
     
+    if (size <= 0 || size > 10 * 1024 * 1024) { // Max 10MB
+        fprintf(stderr, "[CONFIG] Invalid file size: %ld\n", size);
+        fclose(f);
+        return -1;
+    }
+    
     char *json = malloc(size + 1);
-    fread(json, 1, size, f);
+    if (!json) {
+        fprintf(stderr, "[CONFIG] Failed to allocate memory\n");
+        fclose(f);
+        return -1;
+    }
+    
+    size_t bytes_read = fread(json, 1, size, f);
+    if (bytes_read != (size_t)size) {
+        fprintf(stderr, "[CONFIG] Failed to read entire file\n");
+        free(json);
+        fclose(f);
+        return -1;
+    }
     json[size] = '\0';
     fclose(f);
     

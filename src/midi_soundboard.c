@@ -37,9 +37,13 @@ int soundboard_init(void) {
 }
 
 int soundboard_load_soundbite(uint8_t page, uint8_t note, const int16_t *data, size_t length, 
-                              uint32_t sample_rate, float volume_offset, uint8_t mode) {
+                              uint32_t sample_rate, float volume_offset, sound_mode_t mode) {
+    // Validate inputs
     if (page >= MAX_PAGES || note >= MAX_NOTES || data == NULL || length == 0) {
         return -1;
+    }
+    if (mode > SOUND_MODE_HOLD) {
+        return -1; // Invalid mode
     }
     
     soundbite_t *sb = &pages[page].soundbites[note];
@@ -88,7 +92,7 @@ int soundboard_play_note(uint8_t page, uint8_t note) {
     bool loop = false;
     bool hold = false;
     
-    if (sb->mode == 0) { // LOOP mode - toggle on/off
+    if (sb->mode == SOUND_MODE_LOOP) { // LOOP mode - toggle on/off
         if (sb->is_playing) {
             // Already playing - stop it (toggle off)
             sb->is_playing = false;
@@ -99,14 +103,14 @@ int soundboard_play_note(uint8_t page, uint8_t note) {
             hold = false;
             sb->is_playing = true;
         }
-    } else if (sb->mode == 2) { // HOLD mode
+    } else if (sb->mode == SOUND_MODE_HOLD) { // HOLD mode
         loop = false;
         hold = true;
         if (sb->is_playing) {
             return 0; // Already playing
         }
         sb->is_playing = true;
-    } else { // ONESHOT mode (1)
+    } else { // ONESHOT mode
         loop = false;
         hold = false;
     }
@@ -124,10 +128,10 @@ int soundboard_stop_note(uint8_t page, uint8_t note) {
         return -1;
     }
     
-    if (sb->mode == 2) { // HOLD mode - stop when note released
+    if (sb->mode == SOUND_MODE_HOLD) { // HOLD mode - stop when note released
         sb->is_playing = false;
         return audio_stop_sound(sb->data);
-    } else if (sb->mode == 0) { // LOOP mode - note off doesn't stop (toggle only)
+    } else if (sb->mode == SOUND_MODE_LOOP) { // LOOP mode - note off doesn't stop (toggle only)
         // Loop mode is toggled by note on, not note off
         return 0;
     }

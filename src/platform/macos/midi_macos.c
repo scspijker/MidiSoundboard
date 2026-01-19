@@ -4,6 +4,7 @@
 #include <CoreMIDI/CoreMIDI.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <pthread.h>
 
 #define MAX_MIDI_SOURCES 32
 
@@ -13,22 +14,15 @@ static MIDIEndpointRef sources[MAX_MIDI_SOURCES] = {0};
 static ItemCount source_count = 0;
 static midi_event_t pending_event = {0};
 static bool has_pending_event = false;
+static pthread_mutex_t event_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static void midi_read_proc(const MIDIPacketList *pktlist, void *refCon, void *connRefCon) {
     (void)refCon;
     (void)connRefCon;
     
-    printf("[MIDI] Received packet list with %u packets\n", (unsigned int)pktlist->numPackets);
-    
     const MIDIPacket *packet = &pktlist->packet[0];
     
     for (UInt32 i = 0; i < pktlist->numPackets; i++) {
-        printf("[MIDI] Packet %u: length=%u, data=", (unsigned int)i, (unsigned int)packet->length);
-        for (UInt16 j = 0; j < packet->length && j < 16; j++) {
-            printf("%02X ", packet->data[j]);
-        }
-        printf("\n");
-        
         if (packet->length >= 3) {
             uint8_t status = packet->data[0];
             uint8_t note = packet->data[1];
@@ -37,26 +31,15 @@ static void midi_read_proc(const MIDIPacketList *pktlist, void *refCon, void *co
             // Check if it's a note on or note off message
             uint8_t message_type = status & 0xF0;
             
-            printf("[MIDI] Status=0x%02X, Note=%u, Velocity=%u, Type=0x%02X\n", 
-                   status, note, velocity, message_type);
-            
-            if (message_type == 0x90) { // Note On
+            if (message_type == 0x90 || message_type == 0x80) {
+                // Thread-safe write to pending event
+                pthread_mutex_lock(&event_mutex);
                 pending_event.note = note;
                 pending_event.velocity = velocity;
-                pending_event.is_on = (velocity > 0); // Note on with velocity 0 is actually note off
+                pending_event.is_on = (message_type == 0x90 && velocity > 0);
                 has_pending_event = true;
-                printf("[MIDI] Queued Note ON event: note=%u, velocity=%u\n", note, velocity);
-            } else if (message_type == 0x80) { // Note Off
-                pending_event.note = note;
-                pending_event.velocity = velocity;
-                pending_event.is_on = false;
-                has_pending_event = true;
-                printf("[MIDI] Queued Note OFF event: note=%u\n", note);
-            } else {
-                printf("[MIDI] Ignored message type 0x%02X\n", message_type);
+                pthread_mutex_unlock(&event_mutex);
             }
-        } else {
-            printf("[MIDI] Packet too short (length=%u), ignoring\n", (unsigned int)packet->length);
         }
         
         packet = MIDIPacketNext(packet);
@@ -142,11 +125,14 @@ int midi_read(midi_event_t *event) {
         return -1;
     }
     
+    pthread_mutex_lock(&event_mutex);
     if (has_pending_event) {
         *event = pending_event;
         has_pending_event = false;
+        pthread_mutex_unlock(&event_mutex);
         return 0;
     }
+    pthread_mutex_unlock(&event_mutex);
     
     return 1; // No event available
 }
@@ -177,7 +163,12 @@ void midi_cleanup(void) {
         sources[i] = 0;
     }
     source_count = 0;
+    
+    pthread_mutex_lock(&event_mutex);
     has_pending_event = false;
+    pthread_mutex_unlock(&event_mutex);
+    
+    pthread_mutex_destroy(&event_mutex);
 }
 
 #endif // __APPLE__
